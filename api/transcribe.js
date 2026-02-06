@@ -1,32 +1,27 @@
 export const config = {
-  api: {
-    bodyParser: false,
-  },
+  runtime: 'edge',
 };
 
-export default async function handler(req, res) {
+export default async function handler(req) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
-  // Read the raw body as a buffer
-  const chunks = [];
-  for await (const chunk of req) {
-    chunks.push(chunk);
-  }
-  const body = Buffer.concat(chunks);
-
-  // Extract model from a custom header to pick the right endpoint
-  const model = req.headers['x-model'] || 'whisper-v3';
+  const model = req.headers.get('x-model') || 'whisper-v3';
   const baseUrl = model === 'whisper-v3-turbo'
     ? 'https://audio-turbo.api.fireworks.ai'
     : 'https://audio-prod.api.fireworks.ai';
 
-  // Use the API key from env, or allow override from header (for flexibility)
-  const apiKey = process.env.FIREWORKS_API_KEY || req.headers['x-api-key'] || '';
+  const apiKey = process.env.FIREWORKS_API_KEY || '';
 
   if (!apiKey) {
-    return res.status(401).json({ error: 'No API key configured. Set FIREWORKS_API_KEY env var.' });
+    return new Response(JSON.stringify({ error: 'No API key configured.' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   try {
@@ -34,19 +29,21 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: {
         'Authorization': apiKey,
-        'Content-Type': req.headers['content-type'],
+        'Content-Type': req.headers.get('content-type'),
       },
-      body: body,
+      body: req.body,
     });
 
-    const contentType = upstream.headers.get('content-type') || 'application/json';
-    const responseBody = await upstream.text();
-
-    res.status(upstream.status);
-    res.setHeader('Content-Type', contentType);
-    res.send(responseBody);
+    return new Response(upstream.body, {
+      status: upstream.status,
+      headers: {
+        'Content-Type': upstream.headers.get('content-type') || 'application/json',
+      },
+    });
   } catch (err) {
-    console.error('Proxy error:', err);
-    res.status(502).json({ error: 'Failed to reach Fireworks API', detail: err.message });
+    return new Response(JSON.stringify({ error: 'Failed to reach Fireworks API', detail: err.message }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
