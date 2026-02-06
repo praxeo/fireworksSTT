@@ -1,0 +1,10 @@
+{
+  "rewrites": [
+    { "source": "/api/transcribe", "destination": "/api/transcribe" }
+  ],
+  "functions": {
+    "api/transcribe.js": {
+      "maxDuration": 300
+    }
+  }
+}

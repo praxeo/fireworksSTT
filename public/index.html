@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Whisper Transcribe</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0b;
+      --surface: #141416;
+      --surface-2: #1c1c20;
+      --border: #2a2a30;
+      --text: #e4e4e7;
+      --text-muted: #71717a;
+      --accent: #f97316;
+      --accent-dim: #f9731620;
+      --success: #22c55e;
+      --error: #ef4444;
+      --radius: 10px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 640px;
+      padding: 40px 20px;
+    }
+
+    header {
+      margin-bottom: 36px;
+    }
+
+    header h1 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    header h1 .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      margin-top: 6px;
+    }
+
+    /* Options */
+    .options-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .option-group {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+
+    .option-group label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .option-group select {
+      width: 100%;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .option-group select:focus {
+      border-color: var(--accent);
+    }
+
+    /* Drop Zone */
+    .drop-zone {
+      background: var(--surface);
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      margin-bottom: 20px;
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .drop-zone input[type="file"] {
+      display: none;
+    }
+
+    .drop-zone .icon {
+      font-size: 2rem;
+      margin-bottom: 12px;
+      opacity: 0.6;
+    }
+
+    .drop-zone .label {
+      font-size: 0.95rem;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .drop-zone .sublabel {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .file-info {
+      display: none;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-top: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--accent);
+      text-align: left;
+    }
+
+    .file-info.visible {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .file-info .remove {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0 4px;
+    }
+
+    .file-info .remove:hover {
+      color: var(--error);
+    }
+
+    /* Transcribe Button */
+    .transcribe-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: var(--radius);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 24px;
+    }
+
+    .transcribe-btn:hover:not(:disabled) {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .transcribe-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .transcribe-btn.loading {
+      position: relative;
+      color: transparent;
+    }
+
+    .transcribe-btn.loading::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 20px;
+      height: 20px;
+      margin: -10px 0 0 -10px;
+      border: 2px solid #0005;
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Progress */
+    .progress-text {
+      display: none;
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .progress-text.visible {
+      display: block;
+    }
+
+    /* Result */
+    .result-section {
+      display: none;
+    }
+
+    .result-section.visible {
+      display: block;
+    }
+
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .result-header h2 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .result-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .result-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      font-size: 0.95rem;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      min-height: 100px;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .copy-btn, .download-btn {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 14px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover, .download-btn:hover {
+      color: var(--text);
+      border-color: var(--text-muted);
+    }
+
+    /* Error */
+    .error-msg {
+      display: none;
+      background: #ef444415;
+      border: 1px solid #ef444440;
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      color: var(--error);
+      font-size: 0.85rem;
+      margin-bottom: 16px;
+    }
+
+    .error-msg.visible {
+      display: block;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    @media (max-width: 500px) {
+      .options-row { flex-direction: column; }
+      .container { padding: 24px 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1><span class="dot"></span>Whisper Transcribe</h1>
+      <p>Audio transcription via Fireworks AI — Whisper v3</p>
+    </header>
+
+    <!-- Options -->
+    <div class="options-row">
+      <div class="option-group">
+        <label>Model</label>
+        <select id="model">
+          <option value="whisper-v3">Whisper v3 (Large)</option>
+          <option value="whisper-v3-turbo">Whisper v3 Turbo</option>
+        </select>
+      </div>
+      <div class="option-group">
+        <label>Language</label>
+        <select id="language">
+          <option value="">Auto-detect</option>
+          <option value="en">English</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="zh">Chinese</option>
+          <option value="ja">Japanese</option>
+          <option value="pt">Portuguese</option>
+          <option value="ko">Korean</option>
+          <option value="it">Italian</option>
+          <option value="ar">Arabic</option>
+          <option value="hi">Hindi</option>
+          <option value="ru">Russian</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Upload -->
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".mp3,.wav,.flac,.m4a,.ogg,.webm">
+      <div class="icon">🎙</div>
+      <div class="label">Drop audio file or click to browse</div>
+      <div class="sublabel">MP3, WAV, FLAC, M4A — up to 1 GB</div>
+      <div class="file-info" id="fileInfo">
+        <span id="fileName"></span>
+        <button class="remove" id="removeFile" title="Remove file">✕</button>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div class="error-msg" id="errorMsg"></div>
+
+    <!-- Progress -->
+    <div class="progress-text" id="progressText"></div>
+
+    <!-- Button -->
+    <button class="transcribe-btn" id="transcribeBtn" disabled>Transcribe</button>
+
+    <!-- Result -->
+    <div class="result-section" id="resultSection">
+      <div class="result-header">
+        <h2>Transcription</h2>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="result-meta" id="resultMeta"></span>
+          <div class="btn-row">
+            <button class="download-btn" id="downloadBtn">Download .txt</button>
+            <button class="copy-btn" id="copyBtn">Copy</button>
+          </div>
+        </div>
+      </div>
+      <div class="result-box" id="resultBox"></div>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    const modelSelect = $('model');
+    const languageSelect = $('language');
+    const dropZone = $('dropZone');
+    const fileInput = $('fileInput');
+    const fileInfo = $('fileInfo');
+    const fileName = $('fileName');
+    const removeFile = $('removeFile');
+    const errorMsg = $('errorMsg');
+    const progressText = $('progressText');
+    const transcribeBtn = $('transcribeBtn');
+    const resultSection = $('resultSection');
+    const resultBox = $('resultBox');
+    const resultMeta = $('resultMeta');
+    const copyBtn = $('copyBtn');
+    const downloadBtn = $('downloadBtn');
+
+    let selectedFile = null;
+
+    // --- File handling ---
+    dropZone.addEventListener('click', (e) => {
+      if (e.target === removeFile || e.target.closest('.remove')) return;
+      fileInput.click();
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length) setFile(fileInput.files[0]);
+    });
+
+    removeFile.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearFile();
+    });
+
+    function setFile(file) {
+      selectedFile = file;
+      const sizeMB = (file.size / 1048576).toFixed(1);
+      fileName.textContent = `${file.name} (${sizeMB} MB)`;
+      fileInfo.classList.add('visible');
+      updateBtn();
+    }
+
+    function clearFile() {
+      selectedFile = null;
+      fileInput.value = '';
+      fileInfo.classList.remove('visible');
+      updateBtn();
+    }
+
+    function updateBtn() {
+      transcribeBtn.disabled = !selectedFile;
+    }
+
+    // --- Transcription ---
+    transcribeBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+
+      showError('');
+      resultSection.classList.remove('visible');
+      transcribeBtn.classList.add('loading');
+      transcribeBtn.disabled = true;
+
+      const model = modelSelect.value;
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('model', model);
+      formData.append('response_format', 'verbose_json');
+      formData.append('temperature', '0');
+
+      const lang = languageSelect.value;
+      if (lang) formData.append('language', lang);
+
+      // Show upload progress for large files
+      const sizeMB = selectedFile.size / 1048576;
+      if (sizeMB > 10) {
+        showProgress('Uploading...');
+      }
+
+      const startTime = performance.now();
+
+      try {
+        const resp = await fetch('/api/transcribe', {
+          method: 'POST',
+          headers: {
+            'x-model': model,
+          },
+          body: formData,
+        });
+
+        showProgress('Transcribing...');
+
+        if (!resp.ok) {
+          const errText = await resp.text();
+          throw new Error(`HTTP ${resp.status}: ${errText}`);
+        }
+
+        const data = await resp.json();
+        const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+        const duration = data.duration ? formatDuration(data.duration) : '';
+        const lang_detected = data.language || '';
+
+        resultMeta.textContent = [duration, lang_detected, `${elapsed}s`].filter(Boolean).join(' · ');
+        resultBox.textContent = data.text || '(no text returned)';
+        resultSection.classList.add('visible');
+        hideProgress();
+      } catch (err) {
+        showError(err.message);
+        hideProgress();
+      } finally {
+        transcribeBtn.classList.remove('loading');
+        updateBtn();
+      }
+    });
+
+    function formatDuration(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = Math.round(seconds % 60);
+      if (m > 0) return `${m}m ${s}s audio`;
+      return `${s}s audio`;
+    }
+
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(resultBox.textContent).then(() => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+      });
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      const text = resultBox.textContent;
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const baseName = selectedFile
+        ? selectedFile.name.replace(/\.[^.]+$/, '')
+        : 'transcription';
+      a.download = `${baseName}_transcript.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorMsg.classList.toggle('visible', !!msg);
+    }
+
+    function showProgress(msg) {
+      progressText.textContent = msg;
+      progressText.classList.add('visible');
+    }
+
+    function hideProgress() {
+      progressText.classList.remove('visible');
+    }
+  </script>
+</body>
+</html>
